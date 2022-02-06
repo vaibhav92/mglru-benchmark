@@ -150,6 +150,12 @@ echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT
 kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="$(cat /proc/cmdline)" || exit 1
 
 
-#dont do "kexec -e" here. caller should do this if exit 0
-#kexec -e
-exit 0
+echo "Sleeping for 30 seconds before next reboot"
+sync
+sleep 30
+
+#boot into next kernel
+kexec -e
+
+#never reached
+exit 1
