@@ -2,57 +2,148 @@
 #PATH=$PATH:/home/vajain21/YCSB/bin
 DISK_DEVICE=/dev/pmem0s
 MOUNT_POINT=/data
-DISK_IMAGE=/home/vajain21/mglru/data/mongodb.qcow2
 export YCSB_HOME=/home/vajain21/mglru/YCSB
+DATA_DIR=/home/vajain21/mglru/data
+RESULTS_DIR=${DATA_DIR}/results
+DISK_IMAGE=${DATA_DIR}/mongodb.qcow2
 
-RESULTS_DIR=results
-DISTRIBUTION=uniform
+#YCSB Workload params
+YCSB_RECORD_COUNT=80000000
+YCSB_OPERATION_COUNT=80000000
 
+#initial setup
+echo "Stopping Mongodb and  Unmounting Data disk"
 systemctl daemon-reload
 systemctl stop mongodb
 umount ${DISK_DEVICE}
 
-echo "Restoring disk image"
-#e2image -I ${DISK_DEVICE} ${DISK_IMAGE}
-qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${DISK_DEVICE}
-
-mount ${DISK_DEVICE} ${MOUNT_POINT}
-systemctl restart mongodb.sloce
-systemctl start mongodb.service
-sleep 1
-systemctl is-active mongodb.service || exit 1
-
-MONGO_URL=%2Frun%2Fmongodb%2F$(basename $(ls -1 /run/mongodb/*.sock | head -n1))
-echo ${MONGO_URL}
-
 # setup the results DIR
-RESULTS_DIR=$RESULTS_DIR/$(uname -r)
+mkdir -p ${RESULTS_DIR}
 
-#check for requested distribution
-[ ! -d "${RESULTS_DIR}/zipfian" ] && DISTRIBUTION=zipfian
-[ ! -d "${RESULTS_DIR}/exponential" ] && DISTRIBUTION=exponential
-[ ! -d "${RESULTS_DIR}/uniform" ] && DISTRIBUTION=uniform
+#find the last run index and distribution
+LAST_RUN=$(ls -1 ${RESULTS_DIR} | sort -nr | head -n1)
+LAST_DISTRIBUTION=zipfian
+LAST_KERNEL=""
 
-mkdir -p ${RESULTS_DIR}/${DISTRIBUTION}
-RESULTS_DIR=$(readlink -f ${RESULTS_DIR}/${DISTRIBUTION})
+if [ -n "${LAST_RUN}" ]; then
+    #check for last distribution used
+    if [ -f ${RESULTS_DIR}/${LAST_RUN}/distribution ]; then
+	LAST_DISTRIBUTION=$(cat ${RESULTS_DIR}/${LAST_RUN}/distribution)
+    fi
+    if [ -f ${RESULTS_DIR}/${LAST_RUN}/boot.kernel ]; then
+	LAST_KERNEL=$(cat ${RESULTS_DIR}/${LAST_RUN}/boot.kernel)
+    fi
+else
+    LAST_RUN=0
+fi
+
+CURRENT_KERNEL=$(uname -r)
+CURRENT_RUN=$((${LAST_RUN} + 1))
+DISTRIBUTION=uniform
+#find the next distribution to try
+if [ "${LAST_DISTRIBUTION}" == "zipfian" ]; then
+    DISTRIBUTION=uniform
+elif [ "${LAST_DISTRIBUTION}" == "uniform" ]; then
+    DISTRIBUTION=exponential
+elif [ "${LAST_DISTRIBUTION}" == "exponential" ]; then
+    DISTRIBUTION=zipfian
+else
+    echo "Unknown Last Distribution ${LAST_DISTRIBUTION}"
+    DISTRIBUTION=uniform
+fi
+
+echo "Last Distribution " ${LAST_DISTRIBUTION}
+echo "Curr Distribution " ${DISTRIBUTION}
+echo "Last Kernel " ${LAST_KERNEL}
+echo "Curr Kernel " ${CURRENT_KERNEL}
+
+
+#setup the results dir
+mkdir -p ${RESULTS_DIR}/${CURRENT_RUN}
+RESULTS_DIR=$(readlink -f ${RESULTS_DIR}/${CURRENT_RUN})
 echo "Dumping results to ${RESULTS_DIR}"
 
-pushd .
-cd ${YCSB_HOME}
-# run the workload
-python2 ./bin/ycsb run mongodb -s -threads 64 \
+#generate configuration for mongodb
+echo "Generating Mongodb Configuration"
+cp -f mongod.conf ${RESULTS_DIR}
+ln -sf -t /etc ${RESULTS_DIR}/mongod.conf
+
+echo "Restoring disk image"
+#e2image -I ${DISK_DEVICE} ${DISK_IMAGE}
+echo qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${DISK_DEVICE}
+
+echo "Remounting disk"
+mount ${DISK_DEVICE} ${MOUNT_POINT}
+
+echo "Restarting Mongodb"
+systemctl restart mongodb.slice
+systemctl start mongodb.service
+sleep 1
+echo -n "Checking if MongoDB is alive.."
+systemctl is-active mongodb.service || exit 1
+
+#check the mongodb url to use
+MONGO_URL=%2Frun%2Fmongodb%2F$(basename $(ls -1 /run/mongodb/*.sock | head -n1))
+echo "Using Mongodb URL ${MONGO_URL}"
+
+WORKLOAD="python2 ./bin/ycsb run mongodb -s -threads 64 \
     -p mongodb.url=mongodb://${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
-    -p recordcount=80000000 -p operationcount=80000000 \
+    -p recordcount=${YCSB_RECORD_COUNT} -p operationcount=${YCSB_OPERATION_COUNT} \
     -p readproportion=0.8 -p updateproportion=0.2 \
-    -p requestdistribution=${DISTRIBUTION} 2>&1 | tee ${RESULTS_DIR}/ycsb.log
-popd
+    -p requestdistribution=${DISTRIBUTION}"
 
+echo "${DISTRIBUTION}" > ${RESULTS_DIR}/distribution
+echo "${CURRENT_KERNEL}" > ${RESULTS_DIR}/boot.kernel
+echo $(cat /proc/cmdline) >> ${RESULTS_DIR}/boot.cmdline
+echo ${WORKLOAD} > ${RESULTS_DIR}/workload
+
+echo "Collecting initial data"
+date > ${RESULTS_DIR}/timestamp.intial
+cp /proc/vmstat ${RESULTS_DIR}/vmstat.initial
+
+# run the workload
+echo Staring workload ${WORKLOAD}
+pushd . > /dev/null
+cd ${YCSB_HOME}
+echo ${WORKLOAD} 2>&1 | tee "${RESULTS_DIR}/ycsb.log"
+[ "$?" -ne "0" ] && exit 1
+popd  > /dev/null
+
+#collect other metrics
+echo "Collecting Metrices"
 cp /sys/fs/cgroup/mongodb.slice/memory.* ${RESULTS_DIR}
+cp /proc/vmstat ${RESULTS_DIR}/vmstat.final
+date > ${RESULTS_DIR}/timestamp.final
 
+#cleanup
+echo "Cleanup/Stopping Services"
 systemctl stop mongodb
 umount ${DISK_DEVICE}
 systemctl stop mongodb.slice
 
+echo "Picking up next kernel to boot"
+
+#switch kernel needed
+if [ "${DISTRIBUTION}" == "zipfian" ]; then
+    if [[ "${CURRENT_KERNEL}" =~ 'non-mglru' ]]; then
+	NEXT_BOOT_TYPE="mglru+"
+    else
+	NEXT_BOOT_TYPE="non-mglru"
+    fi
+else
+    if [[ "${CURRENT_KERNEL}" =~ 'non-mglru' ]]; then
+	NEXT_BOOT_TYPE="non-mglru"
+    else
+	NEXT_BOOT_TYPE="mglru+"
+    fi
+fi
+
+echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE}
+#load the kexec kernel and initrd
+kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="$(cat /proc/cmdline)" || exit 1
 
 
+#dont do "kexec -e" here. caller should do this if exit 0
+#kexec -e
+exit 0
