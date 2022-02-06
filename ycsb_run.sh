@@ -78,12 +78,18 @@ mount ${DISK_DEVICE} ${MOUNT_POINT}
 echo "Restarting Mongodb"
 systemctl restart mongodb.slice
 systemctl start mongodb.service
-sleep 1
+sleep 4
 echo -n "Checking if MongoDB is alive.."
 systemctl is-active mongodb.service || exit 1
 
 #check the mongodb url to use
-MONGO_URL=%2Frun%2Fmongodb%2F$(basename $(ls -1 /run/mongodb/*.sock | head -n1))
+MONGO_SOCK=$(ls -1 /run/mongodb/*.sock | head -n1)
+if [ -z "${MONGO_SOCK}" ]; then
+    echo "Unable to find Mongodb Unix Socket"
+    exit 1
+fi
+
+MONGO_URL=$(echo ${MONGO_SOCK} | sed 's|/|%2F|g')
 echo "Using Mongodb URL ${MONGO_URL}"
 
 WORKLOAD="python2 ./bin/ycsb run mongodb -s -threads 64 \
@@ -139,7 +145,7 @@ else
     fi
 fi
 
-echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE}
+echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE} | tee ${RESULTS_DIR}/next-kernel
 #load the kexec kernel and initrd
 kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="$(cat /proc/cmdline)" || exit 1
 
