@@ -1,0 +1,25 @@
+[Unit]
+Description=MongoDB Database Server
+After=network.target
+
+[Service]
+# (file size)
+LimitFSIZE=infinity
+# (cpu time)
+LimitCPU=infinity
+# (virtual memory size)
+LimitAS=infinity
+# (locked-in-memory size)
+LimitMEMLOCK=infinity
+# (open files)
+LimitNOFILE=64000
+# (processes/threads)
+LimitNPROC=64000
+User=root
+Group=root
+ExecStartPre=/usr/bin/mkdir -p /run/mongodb
+ExecStart=/usr/bin/numactl --interleave=all /opt/mongo/bin/mongod --config /etc/mongod.conf
+Slice=mongodb.slice
+
+[Install]
+WantedBy=multi-user.target

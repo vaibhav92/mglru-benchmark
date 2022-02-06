@@ -1,0 +1,8 @@
+[Unit]
+Before=systemd-logind.service
+[Slice]
+Slice=mongodb.slice
+MemoryMin=4294967296
+
+[Install]
+WantedBy=multi-user.target
