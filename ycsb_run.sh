@@ -70,7 +70,7 @@ ln -sf -t /etc ${RESULTS_DIR}/mongod.conf
 
 echo "Restoring disk image"
 #e2image -I ${DISK_DEVICE} ${DISK_IMAGE}
-echo qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${DISK_DEVICE}
+qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${DISK_DEVICE}
 
 echo "Remounting disk"
 mount ${DISK_DEVICE} ${MOUNT_POINT}
@@ -112,7 +112,7 @@ cp /proc/vmstat ${RESULTS_DIR}/vmstat.initial
 echo Staring workload ${WORKLOAD}
 pushd . > /dev/null
 cd ${YCSB_HOME}
-echo ${WORKLOAD} 2>&1 | tee "${RESULTS_DIR}/ycsb.log"
+${WORKLOAD} 2>&1 | tee "${RESULTS_DIR}/ycsb.log"
 [ "$?" -ne "0" ] && exit 1
 popd  > /dev/null
 
