@@ -93,7 +93,7 @@ echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOUR
 [ -d 'bench/.git' ] || git -C bench init
 git -C bench fetch ${MGLRU_BENCH_SOURCE} ${MGLRU_BENCH_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-git -c bench checkout FETCH_HEAD
+git -C bench checkout FETCH_HEAD
 curl -L "${MGLRU_BENCH_SERVICE}" -o "data/mglru-benchmark.service"
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
@@ -198,6 +198,5 @@ YCSB_RECORD_COUNT=${YCSB_RECORD_COUNT}
 YCSB_OPERATION_COUNT=${YCSB_OPERATION_COUNT}
 KERNEL_BOOT_ARGS=${KERNEL_BOOT_ARGS}
 EOF
-
 
 popd
