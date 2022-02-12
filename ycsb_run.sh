@@ -1,15 +1,9 @@
 #!/bin/bash
 #PATH=$PATH:/home/vajain21/YCSB/bin
-DISK_DEVICE=/dev/pmem0s
-MOUNT_POINT=/data
-export YCSB_HOME=/home/vajain21/mglru/YCSB
-DATA_DIR=/home/vajain21/mglru/data
-RESULTS_DIR=${DATA_DIR}/results
-DISK_IMAGE=${DATA_DIR}/mongodb.qcow2
-
-#YCSB Workload params
-YCSB_RECORD_COUNT=80000000
-YCSB_OPERATION_COUNT=80000000
+BENCH_CONF=$(dirname $0)/../data/bench.conf
+echo Reading configuration from ${BENCH_CONF}
+source ${BENCH_CONF}
+export ${YCSB_HOME}
 
 #initial setup
 echo "Stopping Mongodb and  Unmounting Data disk"
@@ -133,7 +127,7 @@ echo "Picking up next kernel to boot"
 #switch kernel needed
 if [ "${DISTRIBUTION}" == "zipfian" ]; then
     if [[ "${CURRENT_KERNEL}" =~ 'non-mglru' ]]; then
-	NEXT_BOOT_TYPE="mglru+"
+	NEXT_BOOT_TYPE="mglru"
     else
 	NEXT_BOOT_TYPE="non-mglru"
     fi
@@ -141,13 +135,13 @@ else
     if [[ "${CURRENT_KERNEL}" =~ 'non-mglru' ]]; then
 	NEXT_BOOT_TYPE="non-mglru"
     else
-	NEXT_BOOT_TYPE="mglru+"
+	NEXT_BOOT_TYPE="mglru"
     fi
 fi
 
 echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE} | tee ${RESULTS_DIR}/next-kernel
 #load the kexec kernel and initrd
-kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="$(cat /proc/cmdline)" || exit 1
+kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="${KERNEL_BOOT_ARGS}" || exit 1
 
 
 echo "Sleeping for 30 seconds before next reboot"

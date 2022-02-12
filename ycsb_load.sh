@@ -1,9 +1,9 @@
 #!/bin/bash
-#PATH=$PATH:/home/vajain21/YCSB/bin
-DISK_DEVICE=/dev/pmem0s
-MOUNT_POINT=/data
-DISK_IMAGE=/home/vajain21/mglru/data/mongodb.qcow2
-export YCSB_HOME=/home/vajain21/mglru/YCSB
+
+BENCH_CONF=$(dirname $0)/../data/bench.conf
+echo Reading configuration from ${BENCH_CONF}
+source ${BENCH_CONF}
+export ${YCSB_HOME}
 
 rm -f ${DISK_IMAGE}
 systemctl stop mongodb
@@ -11,7 +11,6 @@ umount ${DISK_DEVICE}
 mkfs.ext4 -F ${DISK_DEVICE}
 mount ${DISK_DEVICE} ${MOUNT_POINT}
 mkdir ${MOUNT_POINT}/db
-chown mongodb:mongodb ${MOUNT_POINT}/db
 systemctl start mongodb.service
 sleep 1
 systemctl is-active mongodb.service || exit 1
@@ -25,7 +24,7 @@ cd ${YCSB_HOME}
 python2 ./bin/ycsb load mongodb -s -threads 1 \
     -p mongodb.url=mongodb://${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
-    -p recordcount=80000000
+    -p recordcount=${YCSB_RECORD_COUNT}
 popd
 
 echo "Stopping Mongodb Service"
