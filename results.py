@@ -42,12 +42,11 @@ def main():
         p = Path(sys.argv[1])
         if not p.is_dir():
             sys.stderr.write(f'{sys.argv[1]} is not a results dir')
-        return
-    
-    testdirs = [ x for x in p.iterdir() if x.is_dir()]
-    print('RUN,IS-MGLRU,Distribution,Throughput')
-    for dir in testdirs:
-        generate_result(Path(dir))
+            return
+        testdirs = [ x for x in p.iterdir() if x.is_dir()]
+        print('RUN,IS-MGLRU,Distribution,Throughput')
+        for dir in testdirs:
+            generate_result(Path(dir))
 
 if __name__ == '__main__':
     sys.exit(main()) 
