@@ -1,7 +1,9 @@
 #!/bin/bash
 
 MONGODB_DISK=/dev/sdc
-
+################################################################################
+## Configuration Section
+################################################################################
 KERNEL_SOURCE_MGLRU=https://linux-mm.googlesource.com/page-reclaim
 KERNEL_SOURCE_REF_MGLRU=refs/changes/49/1549/1
 KERNEL_SOURCE_NON_MGLRU=https://github.com/torvalds/linux/
@@ -19,13 +21,14 @@ YCSB_SOURCE=https://github.com/vaibhav92/YCSB.git
 YCSB_SOURCE_REF=mongodb-domain-sockets
 
 MGLRU_BENCH_SOURCE=https://github.com/vaibhav92/mglru-benchmark.git
-MGLRU_BENCH_SOURCE_REF=""
+MGLRU_BENCH_SOURCE_REF="auto_build"
 
 MONGODB_CONFIG_BASE="https://gist.github.com/vaibhav92/6952d5ec12e7ec3c15165e4212eeff90/raw/cd35d8bb5f669e29a1b00846cae72d428a85448d"
 MGLRU_BENCH_SERVICE="https://gist.githubusercontent.com/vaibhav92/ad1320a7cd0293e2dd8821bccf27271d/raw/7c0c408434a432f01c1b3a9bed38c80b1af00534/mglru-benchmark.service"
 
-
-
+################################################################################
+# Validation Section
+################################################################################
 if [ ! -b "${MONGODB_DISK}" ];then
     echo "Need a block device for var MONGODB_DISK not ${MONGODB_DISK}"
     exit 1
@@ -40,14 +43,10 @@ if [ "${DISK_SIZE}" -lt "${MIN_DISK_SIZE}" ]; then
 fi
 echo "Using disk ${MONGODB_DISK} of size ${DISK_SIZE} bytes"
 
-#install dependencies for RHEL 8.4
-echo "Installing dependencies...."
-dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-devel\
-    maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs util-linux curl numactl dwarves || exit 1
-
-pushd .
-mkdir mglru 2>/dev/null
-cd mglru
+#check the memory size
+MEM_SIZE_KB=$(grep 'MemTotal:' /proc/meminfo| grep -oe '[[:digit:]]*')
+MEM_SIZE=$((${MEM_SIZE_KB} / 1024 / 1024)) # Convert to GiB
+echo "Running on system with ${MEM_SIZE} GiB memory"
 
 #create needed dirs
 mkdir -p linux mongo ycsb data bench results data/mongodb 2> /dev/null
@@ -56,10 +55,16 @@ DATA_DIR=$(readlink -f data)
 RESULTS_DIR=$(readlink -f results)
 DISK_IMAGE=${DATA_DIR}/mongodb.qcow2
 
-#YCSB Workload params
-#scale number of record linearly 80Million records consume 121G space
-YCSB_RECORD_COUNT=$(echo  ${DISK_SIZE} \* 80000000 / \( 1024 \* 1024 \* 1024 \* 121 \)  | bc )
-YCSB_OPERATION_COUNT=${YCSB_RECORD_COUNT}
+################################################################################
+# Pull/Build Bench Dependencies
+################################################################################
+#install dependencies for RHEL 8.4
+echo "Installing dependencies...."
+dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-devel\
+    maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs util-linux curl numactl dwarves || exit 1
+pushd .
+mkdir mglru 2>/dev/null
+cd mglru
 
 
 #clone linux kernel and mglru tree
@@ -84,10 +89,6 @@ echo Downloading YCSB source from ${YCSB_SOURCE}  Ref:${YCSB_SOURCE_REF}
 git -C ycsb fetch ${YCSB_SOURCE} ${YCSB_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 git -C ycsb checkout FETCH_HEAD
-
-echo "Downloading Mongodb Configuration"
-curl -L "${MONGODB_CONFIG_BASE}/{mongod.conf,mongodb.service,mongodb.slice}" -o "data/#1"
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
 [ -d 'bench/.git' ] || git -C bench init
@@ -152,9 +153,18 @@ if [ ! -f "${DATA_DIR}/vmlinux-mglru" ]; then
 fi
 cd ..
 
+################################################################################
+# Bench Configuration
+################################################################################
+
+echo "Downloading Mongodb Configuration"
+curl -L "${MONGODB_CONFIG_BASE}/{mongod.conf,mongodb.service,mongodb.slice}" -o "data/#1"
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+
 echo "Configuring Mongodb"
 MONGO_DATA_DIR=$(readlink -f ${DATA_DIR}/mongodb)
 sed -i "s|dbPath: /data/db|dbPath: ${MONGO_DATA_DIR}|" ${DATA_DIR}/mongod.conf
+
 ln -sf $(readlink -f ${DATA_DIR}/mongod.conf) /etc
 cp -f ${DATA_DIR}/mongodb.service /etc/systemd/system
 cp -f ${DATA_DIR}/mongodb.slice /etc/systemd/system
@@ -171,12 +181,17 @@ systemctl enable mongodb.slice mongodb.service
 systemctl restart mongodb.service
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
-
 sleep 1
 echo "Checking if mongodb is active"
 systemctl is-active mongodb.service
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
+#YCSB Workload params
+echo "Configuring YCSB.."
+#scale number of record linearly 80Million records consume 121G space
+YCSB_RECORD_COUNT=$(echo  ${DISK_SIZE} \* 80000000 / \( 1024 \* 1024 \* 1024 \* 121 \)  | bc )
+YCSB_OPERATION_COUNT=${YCSB_RECORD_COUNT}
+echo "YCSB Recound count ${YCSB_RECORD_COUNT}"
 
 echo "Configuring Bench.."
 BENCH_DIR=$(readlink -f bench)
