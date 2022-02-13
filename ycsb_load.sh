@@ -1,35 +1,25 @@
 #!/bin/bash
 
-BENCH_CONF=$(dirname $0)/../data/bench.conf
+BENCH_HOME=$(dirname $0)
+BENCH_CONF=${BENCH_HOME}/../data/bench.conf
 echo Reading configuration from ${BENCH_CONF}
 source ${BENCH_CONF}
-export ${YCSB_HOME}
+source ${BENCH_HOME}/common.sh
 
-rm -f ${DISK_IMAGE}
-systemctl stop mongodb
-umount ${DISK_DEVICE}
-mkfs.ext4 -F ${DISK_DEVICE}
-mount ${DISK_DEVICE} ${MOUNT_POINT}
-mkdir ${MOUNT_POINT}/db
-systemctl start mongodb.service
-sleep 1
-systemctl is-active mongodb.service || exit 1
 
-MONGO_URL='%2Frun%2Fmongodb%2F'$(basename $(ls -1 /run/mongodb/*.sock | head -n1))
-echo ${MONGO_URL}
+#reset and restart the currently runing instance of mongodb
+reset_mongodb;
 
-pushd .
-cd ${YCSB_HOME}
+MONGO_URL=$(get_mongodb_url)
+echo "Populating Mongodb instance ${MONGO_URL}"
+
 # load objects
-python2 ./bin/ycsb load mongodb -s -threads 1 \
-    -p mongodb.url=mongodb://${MONGO_URL} \
+python2 ${YCSB_HOME}/bin/ycsb load mongodb -s -threads 1 \
+    -p mongodb.url=${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
-    -p recordcount=${YCSB_RECORD_COUNT}
-popd
+    -p recordcount=${YCSB_RECORD_COUNT} || exit 1
 
-echo "Stopping Mongodb Service"
-systemctl stop mongodb.service
-sync
-umount ${MOUNT_POINT}
+stop_mongodb
 echo "Creating disk image to ${DISK_IMAGE}"
-e2image -Qa ${DISK_DEVICE} ${DISK_IMAGE}
+rm -f ${DISK_IMAGE}
+e2image -Qa ${MONGODB_DISK} ${DISK_IMAGE}

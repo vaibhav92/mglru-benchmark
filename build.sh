@@ -1,6 +1,5 @@
 #!/bin/bash
 
-MONGODB_DISK=/dev/sdc
 ################################################################################
 ## Configuration Section
 ################################################################################
@@ -29,7 +28,7 @@ MGLRU_BENCH_SERVICE="https://gist.githubusercontent.com/vaibhav92/ad1320a7cd0293
 ################################################################################
 # Validation Section
 ################################################################################
-if [ ! -b "${MONGODB_DISK}" ];then
+if [[ -z "${MONGODB_DISK}"  || ! -b "${MONGODB_DISK}" ]]; then
     echo "Need a block device for var MONGODB_DISK not ${MONGODB_DISK}"
     exit 1
 fi
@@ -49,23 +48,33 @@ MEM_SIZE=$((${MEM_SIZE_KB} / 1024 / 1024)) # Convert to GiB
 echo "Running on system with ${MEM_SIZE} GiB memory"
 
 #create needed dirs
+pushd .
+mkdir mglru 2>/dev/null
+cd mglru
 mkdir -p linux mongo ycsb data bench results data/mongodb 2> /dev/null
 
 DATA_DIR=$(readlink -f data)
 RESULTS_DIR=$(readlink -f results)
 DISK_IMAGE=${DATA_DIR}/mongodb.qcow2
+BENCH_DIR=$(readlink -f bench)
 
 ################################################################################
-# Pull/Build Bench Dependencies
+# Pull  Bench Dependencies
 ################################################################################
 #install dependencies for RHEL 8.4
 echo "Installing dependencies...."
 dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-devel\
-    maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs util-linux curl numactl dwarves || exit 1
-pushd .
-mkdir mglru 2>/dev/null
-cd mglru
+    maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs \
+    util-linux curl numactl dwarves
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
+echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
+[ -d 'bench/.git' ] || git -C bench init
+git -C bench fetch ${MGLRU_BENCH_SOURCE} ${MGLRU_BENCH_SOURCE_REF}
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+git -C bench checkout FETCH_HEAD
+curl -L "${MGLRU_BENCH_SERVICE}" -o "data/mglru-benchmark.service"
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 #clone linux kernel and mglru tree
 [ -d 'linux/.git' ] || git -C linux init
@@ -90,14 +99,9 @@ git -C ycsb fetch ${YCSB_SOURCE} ${YCSB_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 git -C ycsb checkout FETCH_HEAD
 
-echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
-[ -d 'bench/.git' ] || git -C bench init
-git -C bench fetch ${MGLRU_BENCH_SOURCE} ${MGLRU_BENCH_SOURCE_REF}
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-git -C bench checkout FETCH_HEAD
-curl -L "${MGLRU_BENCH_SERVICE}" -o "data/mglru-benchmark.service"
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-
+################################################################################
+# Build + Install Bench Dependencies
+################################################################################
 #build and install mongodb
 MONGO_VERSION=$(echo ${MONGODB_SOURCE_REF} | sed 's/^r//')
 echo "Building Mongodb..ver:${MONGO_VERSION}"
@@ -131,7 +135,6 @@ if [ ! -f "${DATA_DIR}/vmlinux-non-mglru" ]; then
     dracut --kver $(make kernelrelease)  --force ${DATA_DIR}/initrd-non-mglru
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     cp -f .config ${DATA_DIR}/config-non-mglru
-    make distclean
 fi
 
 
@@ -140,51 +143,47 @@ if [ ! -f "${DATA_DIR}/vmlinux-mglru" ]; then
     echo "Building MGLRU Kernel"
     # git fetch ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU} && git checkout FETCH_HEAD
     echo "Downloading kernel config"
-    # curl -L -qo .config ${KERNEL_CONFIG_MGLRU}
+    curl -L -qo .config ${KERNEL_CONFIG_MGLRU}
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-    # make olddefconfig && make -j 32 vmlinux modules && make modules_install
-    make -j 32 vmlinux modules && make modules_install
+    make olddefconfig && make -j 32 vmlinux modules && make modules_install
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     cp -f vmlinux ${DATA_DIR}/vmlinux-mglru
     dracut --kver $(make kernelrelease)  --force ${DATA_DIR}/initrd-mglru
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     cp -f .config ${DATA_DIR}/config-mglru
-    make distclean
 fi
+make distclean 2> /dev/null
 cd ..
+
+#retore the original directory
+popd
 
 ################################################################################
 # Bench Configuration
 ################################################################################
+#get common functions
+source ${BENCH_DIR}/common.sh
+
+echo "Prepping disk ${MONGODB_DISK}"
+systemctl stop mongodb 2> /dev/null
+umount -f ${MONGODB_DISK}
+mkfs.ext4 -F ${MONGODB_DISK} || exit 1
 
 echo "Downloading Mongodb Configuration"
-curl -L "${MONGODB_CONFIG_BASE}/{mongod.conf,mongodb.service,mongodb.slice}" -o "data/#1"
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+curl -L "${MONGODB_CONFIG_BASE}/{mongod.conf,mongodb.service,mongodb.slice}" -o "${DATA_DIR}/#1" || exit 1
 
 echo "Configuring Mongodb"
 MONGO_DATA_DIR=$(readlink -f ${DATA_DIR}/mongodb)
 sed -i "s|dbPath: /data/db|dbPath: ${MONGO_DATA_DIR}|" ${DATA_DIR}/mongod.conf
-
 ln -sf $(readlink -f ${DATA_DIR}/mongod.conf) /etc
+cp /etc/mongod.conf ${DATA_DIR}/mongod.conf.old
 cp -f ${DATA_DIR}/mongodb.service /etc/systemd/system
 cp -f ${DATA_DIR}/mongodb.slice /etc/systemd/system
-systemctl daemon-reload
-
-echo "Prepping disk ${MONGODB_DISK}"
-umount ${MONGODB_DISK}
-mkfs.ext4 -F ${MONGODB_DISK}
-mount ${MONGODB_DISK} ${DATA_DIR}/mongodb
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi	
+systemctl daemon-reload || exit 1
 
 echo "Enabling mongodb service.."
 systemctl enable mongodb.slice mongodb.service
-systemctl restart mongodb.service
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-
-sleep 1
-echo "Checking if mongodb is active"
-systemctl is-active mongodb.service
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+start_mongodb;
 
 #YCSB Workload params
 echo "Configuring YCSB.."
@@ -194,16 +193,14 @@ YCSB_OPERATION_COUNT=${YCSB_RECORD_COUNT}
 echo "YCSB Recound count ${YCSB_RECORD_COUNT}"
 
 echo "Configuring Bench.."
-BENCH_DIR=$(readlink -f bench)
 sed -i "s|<bench-path>|${BENCH_DIR}|" ${DATA_DIR}/mglru-benchmark.service
 cp -f ${DATA_DIR}/mglru-benchmark.service /etc/systemd/system
 systemctl daemon-reload
 
-
-#echo "Generating Bench Configuration"
+echo "Generating Bench Configuration"
 cat > ${DATA_DIR}/bench.conf <<-EOF
-DISK_DEVICE=${MONGODB_DISK}
-MOUNT_POINT=${MONGO_DATA_DIR}
+MONGODB_DISK=${MONGODB_DISK}
+MONGO_DATA_DIR=${MONGO_DATA_DIR}
 DATA_DIR=${DATA_DIR}
 DISK_IMAGE=${DISK_IMAGE}
 export YCSB_HOME=${YCSB_HOME}
@@ -211,7 +208,9 @@ RESULTS_DIR=${RESULTS_DIR}
 #YCSB Workload params
 YCSB_RECORD_COUNT=${YCSB_RECORD_COUNT}
 YCSB_OPERATION_COUNT=${YCSB_OPERATION_COUNT}
-KERNEL_BOOT_ARGS=${KERNEL_BOOT_ARGS}
+KERNEL_BOOT_ARGS="${KERNEL_BOOT_ARGS}"
 EOF
 
-popd
+MONGODB_URL=$(get_mongodb_url)
+echo "Will be connecting to mongodb at ${MONGODB_URL}"
+echo "Done."

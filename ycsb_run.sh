@@ -1,15 +1,17 @@
 #!/bin/bash
-#PATH=$PATH:/home/vajain21/YCSB/bin
-BENCH_CONF=$(dirname $0)/../data/bench.conf
+
+BENCH_HOME=$(dirname $0)
+BENCH_CONF=${BENCH_HOME}/../data/bench.conf
 echo Reading configuration from ${BENCH_CONF}
 source ${BENCH_CONF}
-export ${YCSB_HOME}
+source ${BENCH_HOME}/common.sh
+
+
+#check if we are booting into a mglru/nonmglru kernel
+check_and_boot_to_mglru_if_needed;
 
 #initial setup
-echo "Stopping Mongodb and  Unmounting Data disk"
-systemctl daemon-reload
-systemctl stop mongodb
-umount ${DISK_DEVICE}
+stop_mongodb
 
 # setup the results DIR
 mkdir -p ${RESULTS_DIR}
@@ -51,43 +53,27 @@ echo "Curr Distribution " ${DISTRIBUTION}
 echo "Last Kernel " ${LAST_KERNEL}
 echo "Curr Kernel " ${CURRENT_KERNEL}
 
-
 #setup the results dir
 mkdir -p ${RESULTS_DIR}/${CURRENT_RUN}
 RESULTS_DIR=$(readlink -f ${RESULTS_DIR}/${CURRENT_RUN})
 echo "Dumping results to ${RESULTS_DIR}"
 
-#generate configuration for mongodb
-echo "Generating Mongodb Configuration"
-cp -f mongod.conf ${RESULTS_DIR}
-ln -sf -t /etc ${RESULTS_DIR}/mongod.conf
-
 echo "Restoring disk image"
-#e2image -I ${DISK_DEVICE} ${DISK_IMAGE}
-qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${DISK_DEVICE}
+#e2image -I ${MONGODB_DISK} ${DISK_IMAGE}
+qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${MONGODB_DISK}
 
-echo "Remounting disk"
-mount ${DISK_DEVICE} ${MOUNT_POINT}
+#generate and update configuration for mongodb
+echo "Generating Mongodb Configuration"
+cp -f ${DATA_DIR}/mongod.conf ${RESULTS_DIR}
+cp ${RESULTS_DIR}/mongod.conf /etc
 
-echo "Restarting Mongodb"
-systemctl restart mongodb.slice
-systemctl start mongodb.service
-sleep 4
-echo -n "Checking if MongoDB is alive.."
-systemctl is-active mongodb.service || exit 1
+start_mongodb;
 
-#check the mongodb url to use
-MONGO_SOCK=$(ls -1 /run/mongodb/*.sock | head -n1)
-if [ -z "${MONGO_SOCK}" ]; then
-    echo "Unable to find Mongodb Unix Socket"
-    exit 1
-fi
-
-MONGO_URL=$(echo ${MONGO_SOCK} | sed 's|/|%2F|g')
+MONGO_URL=$(get_mongodb_url)
 echo "Using Mongodb URL ${MONGO_URL}"
 
-WORKLOAD="python2 ./bin/ycsb run mongodb -s -threads 64 \
-    -p mongodb.url=mongodb://${MONGO_URL} \
+WORKLOAD="python2 ${YCSB_HOME}/bin/ycsb run mongodb -s -threads 64 \
+    -p mongodb.url${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
     -p recordcount=${YCSB_RECORD_COUNT} -p operationcount=${YCSB_OPERATION_COUNT} \
     -p readproportion=0.8 -p updateproportion=0.2 \
@@ -101,14 +87,13 @@ echo ${WORKLOAD} > ${RESULTS_DIR}/workload
 echo "Collecting initial data"
 date > ${RESULTS_DIR}/timestamp.intial
 cp /proc/vmstat ${RESULTS_DIR}/vmstat.initial
+cp /proc/meminfo ${RESULTS_DIR}/meminfo
+cp /proc/cpuinfo ${RESULTS_DIR}/cpuinfo
 
 # run the workload
 echo Staring workload ${WORKLOAD}
-pushd . > /dev/null
-cd ${YCSB_HOME}
 ${WORKLOAD} 2>&1 | tee "${RESULTS_DIR}/ycsb.log"
 [ "$?" -ne "0" ] && exit 1
-popd  > /dev/null
 
 #collect other metrics
 echo "Collecting Metrices"
@@ -117,13 +102,9 @@ cp /proc/vmstat ${RESULTS_DIR}/vmstat.final
 date > ${RESULTS_DIR}/timestamp.final
 
 #cleanup
-echo "Cleanup/Stopping Services"
-systemctl stop mongodb
-umount ${DISK_DEVICE}
-systemctl stop mongodb.slice
+stop_mongodb
 
 echo "Picking up next kernel to boot"
-
 #switch kernel needed
 if [ "${DISTRIBUTION}" == "zipfian" ]; then
     if [[ "${CURRENT_KERNEL}" =~ 'non-mglru' ]]; then
@@ -139,17 +120,7 @@ else
     fi
 fi
 
-echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE} | tee ${RESULTS_DIR}/next-kernel
-#load the kexec kernel and initrd
-kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="${KERNEL_BOOT_ARGS}" || exit 1
-
-
-echo "Sleeping for 30 seconds before next reboot"
-sync
-sleep 30
-
-#boot into next kernel
-kexec -e
+boot_next_kernel ${NEXT_BOOT_TYPE}
 
 #never reached
 exit 1
