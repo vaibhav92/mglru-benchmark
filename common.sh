@@ -8,12 +8,13 @@
 boot_next_kernel() {
     NEXT_BOOT_TYPE=$1
     echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE} | tee ${RESULTS_DIR}/next-kernel
+    KERNEL_ARGS="$(cat /proc/cmdline) ${KERNEL_BOOT_ARGS}"
     
     echo "Sleeping for 30 seconds before next reboot"
     sleep 30 || exit 1
     
     #load the kexec kernel and initrd
-    kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="${KERNEL_BOOT_ARGS}" || exit 1
+    kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="${KERNEL_ARGS}" || exit 1
     sync
     #boot into next kernel
     kexec -e
