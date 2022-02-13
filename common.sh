@@ -8,13 +8,13 @@
 boot_next_kernel() {
     NEXT_BOOT_TYPE=$1
     echo Next boot of Kernel=vmlinux-${NEXT_BOOT_TYPE} and Initrd=initrd-${NEXT_BOOT_TYPE} | tee ${RESULTS_DIR}/next-kernel
+    
+    echo "Sleeping for 30 seconds before next reboot"
+    sleep 30 || exit 1
+    
     #load the kexec kernel and initrd
     kexec -sl --initrd ${DATA_DIR}/initrd-${NEXT_BOOT_TYPE} ${DATA_DIR}/vmlinux-${NEXT_BOOT_TYPE} --append="${KERNEL_BOOT_ARGS}" || exit 1
-
-    echo "Sleeping for 30 seconds before next reboot"
     sync
-    sleep 30
-
     #boot into next kernel
     kexec -e
 }
@@ -26,11 +26,11 @@ stop_mongodb() {
     umount ${MONGODB_DISK}
 }
 
-check_and_boot_to_mglru_if_needed() {
+check_and_boot_to_non_mglru_if_needed() {
     ## Check if we are booted into a mglru or non-mglru kernel
     CURRENT_KERNEL=$(uname -r)
     if [[ ! "${CURRENT_KERNEL}" =~ '-mglru' ]]; then
-	boot_next_kernel "mglru"
+	boot_next_kernel "non-mglru"
     fi
 }
 

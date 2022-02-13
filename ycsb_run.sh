@@ -8,7 +8,7 @@ source ${BENCH_HOME}/common.sh
 
 
 #check if we are booting into a mglru/nonmglru kernel
-check_and_boot_to_mglru_if_needed;
+check_and_boot_to_non_mglru_if_needed;
 
 #initial setup
 stop_mongodb

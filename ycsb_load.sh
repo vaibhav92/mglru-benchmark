@@ -30,3 +30,7 @@ stop_mongodb
 echo "Creating disk image to ${DISK_IMAGE}"
 rm -f ${DISK_IMAGE}
 e2image -Qa ${MONGODB_DISK} ${DISK_IMAGE}
+
+
+#check if we are booting into a mglru/nonmglru kernel
+check_and_boot_to_non_mglru_if_needed;
