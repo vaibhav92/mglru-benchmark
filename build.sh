@@ -208,8 +208,13 @@ start_mongodb;
 
 #YCSB Workload params
 echo "Configuring YCSB.."
+
 #scale number of record linearly 80Million records consume 121G space
 YCSB_RECORD_COUNT=$(echo  ${DISK_SIZE} \* 80000000 / \( 1024 \* 1024 \* 1024 \* 121 \)  | bc )
+# cap the record count to 80M
+if [ "${YCSB_RECORD_COUNT}" -gt "80000000" ]; then
+    YCSB_RECORD_COUNT=80000000
+fi
 YCSB_OPERATION_COUNT=${YCSB_RECORD_COUNT}
 echo "YCSB Recound count ${YCSB_RECORD_COUNT}"
 
