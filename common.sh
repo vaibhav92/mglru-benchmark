@@ -22,7 +22,7 @@ boot_next_kernel() {
 
 stop_mongodb() {
     echo "Stopping Mongodb and Unmounting Data disk"
-    systemctl stop mongodb
+    systemctl stop mongodb.service
     sync
     umount ${MONGODB_DISK}
 }
