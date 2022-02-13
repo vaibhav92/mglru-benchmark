@@ -6,10 +6,6 @@ echo Reading configuration from ${BENCH_CONF}
 source ${BENCH_CONF}
 source ${BENCH_HOME}/common.sh
 
-
-#check if we are booting into a mglru/nonmglru kernel
-check_and_boot_to_non_mglru_if_needed;
-
 #initial setup
 stop_mongodb
 
