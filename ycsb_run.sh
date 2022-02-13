@@ -74,7 +74,7 @@ echo "Using Mongodb URL ${MONGO_URL}"
 
 WORKLOAD_DIR="${YCSB_HOME}"
 WORKLOAD="python2 ${YCSB_HOME}/bin/ycsb run mongodb -s -threads 64 \
-    -p mongodb.url${MONGO_URL} \
+    -p mongodb.url=${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
     -p recordcount=${YCSB_RECORD_COUNT} -p operationcount=${YCSB_OPERATION_COUNT} \
     -p readproportion=0.8 -p updateproportion=0.2 \

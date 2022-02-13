@@ -19,8 +19,8 @@ cd ${YCSB_HOME}
 python2 ./bin/ycsb load mongodb -s -threads 1 \
     -p mongodb.url=${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
-    -p recordcount=1000
-#    -p recordcount=${YCSB_RECORD_COUNT}
+    -p recordcount=${YCSB_RECORD_COUNT}
+
 if [ "$?" -ne "0" ]; then
     popd
     exit 1
