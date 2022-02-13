@@ -148,7 +148,7 @@ if [ ! -f "${DATA_DIR}/vmlinux-non-mglru" ]; then
     echo "Building NON-MGLRU Kernel"
     git fetch ${KERNEL_SOURCE_NON_MGLRU} ${KERNEL_SOURCE_REF_NON_MGLRU} && git checkout FETCH_HEAD
     echo "Copying kernel config"
-    cp -vf ${BENCH_DIR}/{KERNEL_CONFIG_NON_MGLRU} .config
+    cp -vf ${BENCH_DIR}/${KERNEL_CONFIG_NON_MGLRU} .config
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     make olddefconfig && make -j 32 vmlinux modules && make modules_install
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
@@ -164,7 +164,7 @@ if [ ! -f "${DATA_DIR}/vmlinux-mglru" ]; then
     echo "Building MGLRU Kernel"
     git fetch ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU} && git checkout FETCH_HEAD
     echo "Copying kernel config"
-    cp -vf ${BENCH_DIR}/{KERNEL_CONFIG_MGLRU} .config
+    cp -vf ${BENCH_DIR}/${KERNEL_CONFIG_MGLRU} .config
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     make olddefconfig && make -j 32 vmlinux modules && make modules_install
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
