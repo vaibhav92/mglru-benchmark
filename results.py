@@ -6,7 +6,6 @@ import re
 import datetime
 from pathlib import Path
 
-
 def slurp(path):
     if not (path.exists() and path.is_file()):
         return ''
@@ -35,15 +34,16 @@ def generate_result(path):
 
 
 def main():
-    if len(sys.argv) < 1 :
+    if len(sys.argv) < 1:
         sys.stderr.write(f'Expect results dir path as argument')
         return
 
-    p = Path(sys.argv[1])
-    if not p.is_dir():
-        sys.stderr.write(f'{sys.argv[1]} is not a results dir')
+    for path in sys.argv[1:]:
+        p = Path(sys.argv[1])
+        if not p.is_dir():
+            sys.stderr.write(f'{sys.argv[1]} is not a results dir')
         return
-        
+    
     testdirs = [ x for x in p.iterdir() if x.is_dir()]
     print('RUN,IS-MGLRU,Distribution,Throughput')
     for dir in testdirs:
