@@ -12,6 +12,8 @@ KERNEL_CONFIG_BASE="https://gist.githubusercontent.com/vaibhav92/aff0640c1462f64
 KERNEL_CONFIG_MGLRU="${KERNEL_CONFIG_BASE}/config-mglru"
 KERNEL_CONFIG_NON_MGLRU="${KERNEL_CONFIG_BASE}/config-non-mglru"
 
+QEMU_SOURCE="https://git.qemu.org/git/qemu.git"
+QEMU_SOURCE_REF="v6.1.1"
 
 MONGODB_SOURCE=https://github.com/mongodb/mongo.git
 MONGODB_SOURCE_REF="r5.0.6"
@@ -51,7 +53,7 @@ echo "Running on system with ${MEM_SIZE} GiB memory"
 pushd .
 mkdir mglru 2>/dev/null
 cd mglru
-mkdir -p linux mongo ycsb data bench results data/mongodb 2> /dev/null
+mkdir -p linux mongo ycsb data bench results data/mongodb qemu 2> /dev/null
 
 DATA_DIR=$(readlink -f data)
 RESULTS_DIR=$(readlink -f results)
@@ -65,7 +67,7 @@ BENCH_DIR=$(readlink -f bench)
 echo "Installing dependencies...."
 dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-devel\
     maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs \
-    util-linux curl numactl dwarves
+    util-linux curl numactl dwarves meson ninja-build glib2-devel bzip2 pixman-devel
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
@@ -99,9 +101,32 @@ git -C ycsb fetch ${YCSB_SOURCE} ${YCSB_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 git -C ycsb checkout FETCH_HEAD
 
+#clone qemu repo
+echo Downloading qemu source from ${QEMU_SOURCE}  Ref:${QEMU_SOURCE_REF}
+[ -d 'qemu/.git' ] || git -C qemu init
+git -C qemu fetch ${QEMU_SOURCE} ${QEMU_SOURCE_REF}
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+git -C qemu checkout FETCH_HEAD
+
 ################################################################################
 # Build + Install Bench Dependencies
 ################################################################################
+#build qemu
+echo "Building Qemu..ver:${QEMU_SOURCE_REF}"
+cd qemu
+if [ ! -x "./build/qemu-img" ]; then
+    mkdir build; cd build;
+    ../configure --disable-user --disable-system --enable-tools \
+		 --disable-capstone --disable-guest-agent --enable-debug \
+	&& ninja
+    if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+    #check if qemu-img was generated
+    if [ ! -x "./qemu-img" ]; then popd ;exit 1;fi
+    cd ..
+fi
+cd ..
+QEMU_IMG=$(readlink -f ./qemu/build/qemu-img)
+
 #build and install mongodb
 MONGO_VERSION=$(echo ${MONGODB_SOURCE_REF} | sed 's/^r//')
 echo "Building Mongodb..ver:${MONGO_VERSION}"
@@ -209,6 +234,7 @@ RESULTS_DIR=${RESULTS_DIR}
 YCSB_RECORD_COUNT=${YCSB_RECORD_COUNT}
 YCSB_OPERATION_COUNT=${YCSB_OPERATION_COUNT}
 KERNEL_BOOT_ARGS="${KERNEL_BOOT_ARGS}"
+QEMU_IMG=${QEMU_IMG}
 EOF
 
 MONGODB_URL=$(get_mongodb_url)

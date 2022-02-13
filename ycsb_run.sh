@@ -60,7 +60,7 @@ echo "Dumping results to ${RESULTS_DIR}"
 
 echo "Restoring disk image"
 #e2image -I ${MONGODB_DISK} ${DISK_IMAGE}
-qemu-img convert -p -O raw -f qcow2 ${DISK_IMAGE} ${MONGODB_DISK}
+${QEMU_IMG} convert -p -O raw -f qcow2 ${DISK_IMAGE} ${MONGODB_DISK}
 
 #generate and update configuration for mongodb
 echo "Generating Mongodb Configuration"
