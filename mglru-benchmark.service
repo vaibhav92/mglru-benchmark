@@ -1,0 +1,13 @@
+[Unit]
+Description=MGLRU Benchmark Service
+After=getty.target
+
+[Service]
+User=root
+Group=root
+Type=simple
+RemainAfterExit=no
+ExecStart=/usr/bin/bash -c "cd <bench-path>;./ycsb_run.sh"
+
+[Install]
+WantedBy=multi-user.target

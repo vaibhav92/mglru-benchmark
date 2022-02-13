@@ -8,9 +8,8 @@ KERNEL_SOURCE_REF_MGLRU=refs/changes/49/1549/1
 KERNEL_SOURCE_NON_MGLRU=https://github.com/torvalds/linux/
 KERNEL_SOURCE_REF_NON_MGLRU=v5.16
 KERNEL_BOOT_ARGS="transparent_hugepage=never systemd.unified_cgroup_hierarchy=1"
-KERNEL_CONFIG_BASE="https://gist.githubusercontent.com/vaibhav92/aff0640c1462f641334d453fd0939144/raw/462e21ae10b9e3b7f7faeddfeb41c38d911985c3"
-KERNEL_CONFIG_MGLRU="${KERNEL_CONFIG_BASE}/config-mglru"
-KERNEL_CONFIG_NON_MGLRU="${KERNEL_CONFIG_BASE}/config-non-mglru"
+KERNEL_CONFIG_MGLRU="config-mglru"
+KERNEL_CONFIG_NON_MGLRU="config-non-mglru"
 
 QEMU_SOURCE="https://git.qemu.org/git/qemu.git"
 QEMU_SOURCE_REF="v6.1.1"
@@ -23,9 +22,6 @@ YCSB_SOURCE_REF=mongodb-domain-sockets
 
 MGLRU_BENCH_SOURCE=https://github.com/vaibhav92/mglru-benchmark.git
 MGLRU_BENCH_SOURCE_REF="auto_build"
-
-MONGODB_CONFIG_BASE="https://gist.github.com/vaibhav92/6952d5ec12e7ec3c15165e4212eeff90/raw/cd35d8bb5f669e29a1b00846cae72d428a85448d"
-MGLRU_BENCH_SERVICE="https://gist.githubusercontent.com/vaibhav92/ad1320a7cd0293e2dd8821bccf27271d/raw/7c0c408434a432f01c1b3a9bed38c80b1af00534/mglru-benchmark.service"
 
 ################################################################################
 # Validation Section
@@ -66,8 +62,8 @@ BENCH_DIR=$(readlink -f bench)
 #install dependencies for RHEL 8.4
 echo "Installing dependencies...."
 dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-devel\
-    maven qemu-img libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs \
-    util-linux curl numactl dwarves meson ninja-build glib2-devel bzip2 pixman-devel
+    maven libcurl-devel gcc-c++ elfutils-libelf-devel tar e2fsprogs \
+    util-linux numactl dwarves meson ninja-build glib2-devel bzip2 pixman-devel
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
@@ -75,7 +71,7 @@ echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOUR
 git -C bench fetch ${MGLRU_BENCH_SOURCE} ${MGLRU_BENCH_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 git -C bench checkout FETCH_HEAD
-curl -L "${MGLRU_BENCH_SERVICE}" -o "data/mglru-benchmark.service"
+cp -vf "${BENCH_DIR}/mglru-benchmark.service" "${DATA_DIR}"
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 #clone linux kernel and mglru tree
@@ -151,8 +147,8 @@ if [ ! -f "${DATA_DIR}/vmlinux-non-mglru" ]; then
     #build the non-mglru  kernel
     echo "Building NON-MGLRU Kernel"
     git fetch ${KERNEL_SOURCE_NON_MGLRU} ${KERNEL_SOURCE_REF_NON_MGLRU} && git checkout FETCH_HEAD
-    echo "Downloading kernel config"
-    curl -L -qo .config ${KERNEL_CONFIG_NON_MGLRU}
+    echo "Copying kernel config"
+    cp -vf ${BENCH_DIR}/{KERNEL_CONFIG_NON_MGLRU} .config
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     make olddefconfig && make -j 32 vmlinux modules && make modules_install
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
@@ -166,9 +162,9 @@ fi
 #build the mglru kernel
 if [ ! -f "${DATA_DIR}/vmlinux-mglru" ]; then
     echo "Building MGLRU Kernel"
-    # git fetch ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU} && git checkout FETCH_HEAD
-    echo "Downloading kernel config"
-    curl -L -qo .config ${KERNEL_CONFIG_MGLRU}
+    git fetch ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU} && git checkout FETCH_HEAD
+    echo "Copying kernel config"
+    cp -vf ${BENCH_DIR}/{KERNEL_CONFIG_MGLRU} .config
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
     make olddefconfig && make -j 32 vmlinux modules && make modules_install
     if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
@@ -194,8 +190,8 @@ systemctl stop mongodb 2> /dev/null
 umount -f ${MONGODB_DISK}
 mkfs.ext4 -F ${MONGODB_DISK} || exit 1
 
-echo "Downloading Mongodb Configuration"
-curl -L "${MONGODB_CONFIG_BASE}/{mongod.conf,mongodb.service,mongodb.slice}" -o "${DATA_DIR}/#1" || exit 1
+echo "Copying Mongodb Configuration"
+cp ${BENCH_DIR}/{mongod.conf,mongodb.service,mongodb.slice} ${DATA_DIR}
 
 echo "Configuring Mongodb"
 MONGO_DATA_DIR=$(readlink -f ${DATA_DIR}/mongodb)
