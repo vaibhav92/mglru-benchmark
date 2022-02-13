@@ -67,7 +67,7 @@ dnf install -y git gcc make flex bison openssl-devel python2 python36 python36-d
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
 echo "Downloading MGLRU Bench from "${MGLRU_BENCH_SOURCE} Ref:${MGLRU_BENCH_SOURCE_REF}
-[ -d 'bench/.git' ] || git -C bench init
+git -C bench init
 git -C bench fetch ${MGLRU_BENCH_SOURCE} ${MGLRU_BENCH_SOURCE_REF}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 git -C bench checkout FETCH_HEAD
