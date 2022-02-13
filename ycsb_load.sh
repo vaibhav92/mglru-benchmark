@@ -29,7 +29,7 @@ popd
 stop_mongodb
 echo "Creating disk image to ${DISK_IMAGE}"
 rm -f ${DISK_IMAGE}
-e2image -Qa ${MONGODB_DISK} ${DISK_IMAGE}
+e2image -Qa ${MONGODB_DISK} ${DISK_IMAGE} || exit 1
 
 
 #nonmglru kernel
