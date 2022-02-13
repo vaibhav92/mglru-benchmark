@@ -72,6 +72,7 @@ start_mongodb;
 MONGO_URL=$(get_mongodb_url)
 echo "Using Mongodb URL ${MONGO_URL}"
 
+WORKLOAD_DIR="${YCSB_HOME}"
 WORKLOAD="python2 ${YCSB_HOME}/bin/ycsb run mongodb -s -threads 64 \
     -p mongodb.url${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
@@ -91,10 +92,15 @@ cp /proc/meminfo ${RESULTS_DIR}/meminfo
 cp /proc/cpuinfo ${RESULTS_DIR}/cpuinfo
 
 # run the workload
-echo Staring workload ${WORKLOAD}
+echo Staring workload ${WORKLOAD} at ${WORKLOAD_DIR}
+pushd .
+cd ${WORKLOAD_DIR}
 ${WORKLOAD} 2>&1 | tee "${RESULTS_DIR}/ycsb.log"
-[ "$?" -ne "0" ] && exit 1
-
+if [ "$?" -ne "0" ]; then
+    popd
+    exit 1
+fi
+popd
 #collect other metrics
 echo "Collecting Metrices"
 cp /sys/fs/cgroup/mongodb.slice/memory.* ${RESULTS_DIR}

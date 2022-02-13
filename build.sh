@@ -118,7 +118,7 @@ echo "Building YCSB.."
 cd ycsb
 mvn -pl site.ycsb:mongodb-binding -am clean package
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-YCSB_HOME=$(readlink -f .)
+export YCSB_HOME=$(readlink -f .)
 cd ..
 
 cd linux
@@ -213,4 +213,6 @@ EOF
 
 MONGODB_URL=$(get_mongodb_url)
 echo "Will be connecting to mongodb at ${MONGODB_URL}"
-echo "Done."
+echo "Done Setting up the bench"
+echo "Starting to populate the mongodb instance"
+${BENCH_DIR}/ycsb_load.sh

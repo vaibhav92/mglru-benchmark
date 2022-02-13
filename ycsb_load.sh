@@ -14,11 +14,18 @@ MONGO_URL=$(get_mongodb_url)
 echo "Populating Mongodb instance ${MONGO_URL}"
 
 # load objects
-python2 ${YCSB_HOME}/bin/ycsb load mongodb -s -threads 1 \
+pushd .
+cd ${YCSB_HOME}
+python2 ./bin/ycsb load mongodb -s -threads 1 \
     -p mongodb.url=${MONGO_URL} \
     -p workload=site.ycsb.workloads.CoreWorkload \
-    -p recordcount=${YCSB_RECORD_COUNT} || exit 1
-
+    -p recordcount=1000
+#    -p recordcount=${YCSB_RECORD_COUNT}
+if [ "$?" -ne "0" ]; then
+    popd
+    exit 1
+fi
+popd
 stop_mongodb
 echo "Creating disk image to ${DISK_IMAGE}"
 rm -f ${DISK_IMAGE}

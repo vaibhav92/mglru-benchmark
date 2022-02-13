@@ -58,7 +58,7 @@ reset_mongodb() {
     start_mongodb;
 }
 
-get_mongodb_sock() {
+get_mongodb_url() {
     MONGO_SOCK=$(ls -1 /run/mongodb/*.sock | head -n1)
     if [ -z "${MONGO_SOCK}" ]; then
 	>&2 echo "Unable to find Mongodb Unix Socket"
