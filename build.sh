@@ -189,6 +189,11 @@ echo "Prepping disk ${MONGODB_DISK}"
 systemctl stop mongodb 2> /dev/null
 umount -f ${MONGODB_DISK}
 mkfs.ext4 -F ${MONGODB_DISK} || exit 1
+#get the disk uuid for later mounting 
+DISK_UUID=$(blkid -o value ${MONGODB_DISK} | head -n1)
+if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+# Switch to disk by UUID
+MONGODB_DISK="/dev/disk/by-uuid/${DISK_UUID}"
 
 echo "Copying Mongodb Configuration"
 cp ${BENCH_DIR}/{mongod.conf,mongodb.service,mongodb.slice} ${DATA_DIR}
