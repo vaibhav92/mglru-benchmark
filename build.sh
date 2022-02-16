@@ -3,10 +3,10 @@
 ################################################################################
 ## Configuration Section
 ################################################################################
-KERNEL_SOURCE_MGLRU=https://linux-mm.googlesource.com/page-reclaim
-KERNEL_SOURCE_REF_MGLRU=refs/changes/49/1549/1
+KERNEL_SOURCE_MGLRU=https://github.com/vaibhav92/linux.git
+KERNEL_SOURCE_REF_MGLRU=mglru-v7
 KERNEL_SOURCE_NON_MGLRU=https://github.com/torvalds/linux/
-KERNEL_SOURCE_REF_NON_MGLRU=v5.16
+KERNEL_SOURCE_REF_NON_MGLRU=v5.17-rc4
 KERNEL_BOOT_ARGS="transparent_hugepage=never systemd.unified_cgroup_hierarchy=1"
 KERNEL_CONFIG_MGLRU="config-mglru"
 KERNEL_CONFIG_NON_MGLRU="config-non-mglru"
@@ -21,7 +21,7 @@ YCSB_SOURCE=https://github.com/vaibhav92/YCSB.git
 YCSB_SOURCE_REF=mongodb-domain-sockets
 
 MGLRU_BENCH_SOURCE=https://github.com/vaibhav92/mglru-benchmark.git
-MGLRU_BENCH_SOURCE_REF="auto_build"
+MGLRU_BENCH_SOURCE_REF="v5.17_kernel"
 
 ################################################################################
 # Validation Section
