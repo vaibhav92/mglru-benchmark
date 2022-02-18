@@ -55,7 +55,8 @@ DATA_DIR=$(readlink -f data)
 RESULTS_DIR=$(readlink -f results)
 DISK_IMAGE=${DATA_DIR}/mongodb.qcow2
 BENCH_DIR=$(readlink -f bench)
-
+#generate a uuid for the mongodb disk partition
+MONGODB_DISK_UUID=${uuidgen)
 ################################################################################
 # Pull  Bench Dependencies
 ################################################################################
@@ -79,7 +80,7 @@ if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 echo Downloading MGLRU Tree from ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU}
 git -C linux fetch ${KERNEL_SOURCE_MGLRU} ${KERNEL_SOURCE_REF_MGLRU}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
-echo Downloading MGLRU Tree from ${KERNEL_SOURCE_NON_MGLRU} ${KERNEL_SOURCE_REF_NON_MGLRU}
+echo Downloading NON-MGLRU Tree from ${KERNEL_SOURCE_NON_MGLRU} ${KERNEL_SOURCE_REF_NON_MGLRU}
 git -C linux fetch ${KERNEL_SOURCE_NON_MGLRU} ${KERNEL_SOURCE_REF_NON_MGLRU}
 if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
 
@@ -188,12 +189,9 @@ source ${BENCH_DIR}/common.sh
 echo "Prepping disk ${MONGODB_DISK}"
 systemctl stop mongodb 2> /dev/null
 umount -f ${MONGODB_DISK}
-mkfs.ext4 -F ${MONGODB_DISK} || exit 1
-#get the disk uuid for later mounting 
-DISK_UUID=$(blkid -o value ${MONGODB_DISK} | head -n1)
-if [ "$?" -ne "0" ] ;then popd ;exit 1;fi
+mkfs.ext4 -F ${MONGODB_DISK} -U ${MONGODB_DISK_UUID} || exit 1
 # Switch to disk by UUID
-MONGODB_DISK="/dev/disk/by-uuid/${DISK_UUID}"
+MONGODB_DISK="/dev/disk/by-uuid/${MONGODB_DISK_UUID}"
 
 echo "Copying Mongodb Configuration"
 cp ${BENCH_DIR}/{mongod.conf,mongodb.service,mongodb.slice} ${DATA_DIR}
@@ -241,6 +239,7 @@ YCSB_RECORD_COUNT=${YCSB_RECORD_COUNT}
 YCSB_OPERATION_COUNT=${YCSB_OPERATION_COUNT}
 KERNEL_BOOT_ARGS="${KERNEL_BOOT_ARGS}"
 QEMU_IMG=${QEMU_IMG}
+MONGODB_DISK_UUID=${MONGODB_DISK_UUID}
 EOF
 
 MONGODB_URL=$(get_mongodb_url)
@@ -248,3 +247,4 @@ echo "Will be connecting to mongodb at ${MONGODB_URL}"
 echo "Done Setting up the bench"
 echo "Starting to populate the mongodb instance"
 ${BENCH_DIR}/ycsb_load.sh
+2
