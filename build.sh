@@ -247,4 +247,3 @@ echo "Will be connecting to mongodb at ${MONGODB_URL}"
 echo "Done Setting up the bench"
 echo "Starting to populate the mongodb instance"
 ${BENCH_DIR}/ycsb_load.sh
-2
