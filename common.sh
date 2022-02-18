@@ -55,7 +55,7 @@ reset_mongodb() {
     echo "Resetting Mongodb"
     stop_mongodb;
     echo "Prepping disk ${MONGODB_DISK}"
-    mkfs.ext4 -F ${MONGODB_DISK}
+    mkfs.ext4 -F ${MONGODB_DISK} -U ${MONGODB_DISK_UUID}
     start_mongodb;
 }
 
