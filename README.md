@@ -15,7 +15,7 @@ MGLRU Kernel Mongodb Test Bench for RHEL 8.4
 
 ```
  # cd <home-dir>
- # export MONGODB_DISK=/dev/<disk-name>; curl https://raw.githubusercontent.com/vaibhav92/mglru-benchmark/auto_build/build.sh | bash -s 
+ # export MONGODB_DISK=/dev/<disk-name>; curl https://raw.githubusercontent.com/vaibhav92/mglru-benchmark/v5.17_kernel/build.sh | bash -s 
 ```
 This would install+pull+build the needed dependecies and start the MGLRU benchmark after booting into the base kernel
 
